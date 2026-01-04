@@ -1,0 +1,22 @@
+{
+    "default": [
+        "shorts", "viral", "fyp", "foryou", "trending", 
+        "brasil", "curiosidades", "vocesakeia"
+    ],
+    "education": [
+        "aprender", "educacao", "fatos", "ciencia", 
+        "conhecimento", "cultura", "historia"
+    ],
+    "entertainment": [
+        "diversao", "engracado", "humor", "memes",
+        "comedia", "risadas"
+    ],
+    "tech": [
+        "tecnologia", "tech", "inovacao", "futuro",
+        "ia", "inteligenciaartificial"
+    ],
+    "science": [
+        "ciencia", "espaco", "universo", "natureza",
+        "fisica", "biologia"
+    ]
+}

@@ -1,0 +1,35 @@
+# Ambiente virtual
+venv/
+.venv/
+env/
+
+# Variáveis de ambiente
+.env
+*.env
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Arquivos gerados
+output/
+*.mp4
+*.mp3
+*.wav
+
+# Credenciais
+config/*_token.pickle
+config/client_secrets.json
+*.pickle
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

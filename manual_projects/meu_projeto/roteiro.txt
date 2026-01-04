@@ -1,0 +1,12 @@
+TITULO: Seu Título Aqui
+
+DESCRICAO: Descrição do vídeo para YouTube
+
+HASHTAGS: #tag1 #tag2 #tag3 #tag4 #tag5
+
+NARRACAO:
+Escreva aqui todo o texto que será narrado.
+Pode ter várias linhas.
+O sistema vai converter isso em áudio automaticamente.
+Seja natural, como se estivesse conversando.
+Lembre-se de incluir um gancho no início e uma chamada para ação no final.
