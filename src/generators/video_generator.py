@@ -1,6 +1,6 @@
 """
 Gerador de Video com Legendas Sincronizadas
-v2.2 - Com BLUR BACKGROUND para imagens que não preenchem a tela
+v2.3 - CORRIGIDO para Pillow 10+ (ANTIALIAS → LANCZOS)
 """
 from pathlib import Path
 import random
@@ -18,11 +18,63 @@ from moviepy.editor import (
 from moviepy.video.fx.all import fadein, fadeout
 
 sys.path.append(str(Path(__file__).parent.parent))
-from utils.srt_generator import SRTGenerator
+
+# Tenta importar SRTGenerator
+try:
+    from utils.srt_generator import SRTGenerator
+except ImportError:
+    # Fallback simples se não existir
+    class SRTGenerator:
+        def __init__(self, words_per_subtitle=2):
+            self.words_per_subtitle = words_per_subtitle
+        
+        def calculate_timings(self, text, duration):
+            words = text.split()
+            timings = []
+            words_per_sub = self.words_per_subtitle
+            total_subs = max(1, len(words) // words_per_sub)
+            time_per_sub = duration / total_subs
+            
+            for i in range(0, len(words), words_per_sub):
+                sub_words = words[i:i+words_per_sub]
+                sub_index = i // words_per_sub
+                timings.append({
+                    "text": " ".join(sub_words),
+                    "start": sub_index * time_per_sub,
+                    "end": (sub_index + 1) * time_per_sub
+                })
+            return timings
+        
+        def generate_srt(self, text, duration, output_path):
+            timings = self.calculate_timings(text, duration)
+            with open(output_path, 'w', encoding='utf-8') as f:
+                for i, t in enumerate(timings):
+                    start = self._format_time(t['start'])
+                    end = self._format_time(t['end'])
+                    f.write(f"{i+1}\n{start} --> {end}\n{t['text']}\n\n")
+        
+        def _format_time(self, seconds):
+            h = int(seconds // 3600)
+            m = int((seconds % 3600) // 60)
+            s = int(seconds % 60)
+            ms = int((seconds % 1) * 1000)
+            return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+# =============================================
+# HELPER: Obter método de resampling correto
+# =============================================
+def get_resampling_method():
+    """Retorna o método de resampling correto para a versão do Pillow"""
+    try:
+        return Image.Resampling.LANCZOS
+    except AttributeError:
+        # Pillow < 10
+        return Image.LANCZOS
 
 
 class VideoGenerator:
-    """Gera videos com legendas sincronizadas - v2.2 com Blur Background"""
+    """Gera videos com legendas sincronizadas - v2.3 com Blur Background (CORRIGIDO)"""
     
     def __init__(self, output_dir: str = "output/videos"):
         self.output_dir = Path(output_dir)
@@ -53,19 +105,21 @@ class VideoGenerator:
             "stroke_width": 6,
         }
         
-        # ✅ NOVO: Configurações de blur background
         self.blur_config = {
-            "enabled": True,           # Ativar/desativar blur
-            "blur_radius": 50,         # Intensidade do blur (quanto maior, mais borrado)
-            "darken_factor": 0.6,      # Escurecer o fundo (0.0 = preto, 1.0 = normal)
-            "scale_factor": 1.5,       # Quanto aumentar a imagem de fundo
-            "min_coverage": 0.7,       # Mínimo de cobertura para NÃO aplicar blur (70%)
+            "enabled": True,
+            "blur_radius": 50,
+            "darken_factor": 0.6,
+            "scale_factor": 1.5,
+            "min_coverage": 0.7,
         }
+        
+        # Método de resampling (compatível com Pillow 9 e 10+)
+        self.resample = get_resampling_method()
         
         self.font_path = self._find_font()
         self.srt_gen = SRTGenerator(words_per_subtitle=2)
         
-        print(f"🎬 VideoGenerator v2.2 inicializado")
+        print(f"🎬 VideoGenerator v2.3 inicializado")
         print(f"   ✨ Blur Background: {'Ativado' if self.blur_config['enabled'] else 'Desativado'}")
     
     def _find_font(self) -> str:
@@ -74,6 +128,7 @@ class VideoGenerator:
             "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
             "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
             "/usr/share/fonts/truetype/ubuntu/Ubuntu-Bold.ttf",
+            "/app/assets/fonts/DejaVuSans-Bold.ttf",
         ]
         for p in paths:
             if Path(p).exists():
@@ -93,7 +148,6 @@ class VideoGenerator:
             return 'unknown'
     
     def _validate_video_file(self, file_path: str) -> bool:
-        """Valida se o arquivo de vídeo pode ser lido"""
         try:
             result = subprocess.run([
                 'ffprobe', '-v', 'error',
@@ -116,7 +170,6 @@ class VideoGenerator:
             return False
     
     def _create_black_clip(self, duration: float, width: int, height: int) -> VideoClip:
-        """Cria um clip preto como fallback"""
         def make_frame(t):
             return np.zeros((height, width, 3), dtype=np.uint8)
         
@@ -124,7 +177,6 @@ class VideoGenerator:
     
     def _create_fallback_clip(self, duration: float, width: int, height: int, 
                               original_path: str = None) -> VideoClip:
-        """Cria clip de fallback para arquivos corrompidos"""
         if original_path and os.path.exists(original_path):
             try:
                 temp_frame = original_path.rsplit(".", 1)[0] + "_frame.png"
@@ -153,116 +205,67 @@ class VideoGenerator:
         print(f"      ⬛ Usando clip preto como fallback")
         return self._create_black_clip(duration, width, height)
     
-    # ===========================================
-    # ✅ NOVO: BLUR BACKGROUND
-    # ===========================================
-    
     def _create_blur_background(self, image: Image.Image, target_width: int, target_height: int) -> Image.Image:
-        """
-        Cria um fundo borrado baseado na imagem original
-        
-        Args:
-            image: Imagem PIL original
-            target_width: Largura do canvas final
-            target_height: Altura do canvas final
-            
-        Returns:
-            Imagem PIL com fundo borrado no tamanho correto
-        """
-        # Converte para RGB se necessário
         if image.mode != 'RGB':
             image = image.convert('RGB')
         
-        # Calcula escala para cobrir todo o canvas
         img_w, img_h = image.size
         scale_w = target_width / img_w
         scale_h = target_height / img_h
         scale = max(scale_w, scale_h) * self.blur_config['scale_factor']
         
-        # Redimensiona para cobrir o canvas
         new_w = int(img_w * scale)
         new_h = int(img_h * scale)
         
-        # Usa LANCZOS para qualidade (substitui ANTIALIAS depreciado)
-        try:
-            resample = Image.Resampling.LANCZOS
-        except AttributeError:
-            resample = Image.LANCZOS
+        bg_image = image.resize((new_w, new_h), self.resample)
         
-        bg_image = image.resize((new_w, new_h), resample)
-        
-        # Centraliza e corta para o tamanho do canvas
         left = (new_w - target_width) // 2
         top = (new_h - target_height) // 2
         bg_image = bg_image.crop((left, top, left + target_width, top + target_height))
         
-        # Aplica blur gaussiano
         bg_image = bg_image.filter(ImageFilter.GaussianBlur(radius=self.blur_config['blur_radius']))
         
-        # Escurece o fundo para a imagem principal se destacar
         darken = self.blur_config['darken_factor']
         if darken < 1.0:
-            # Cria overlay escuro
             dark_overlay = Image.new('RGB', (target_width, target_height), (0, 0, 0))
             bg_image = Image.blend(bg_image, dark_overlay, 1.0 - darken)
         
         return bg_image
     
     def _calculate_coverage(self, img_w: int, img_h: int, target_w: int, target_h: int) -> float:
-        """
-        Calcula quanto da área do canvas a imagem cobre (sem distorcer)
-        
-        Returns:
-            Float entre 0.0 e 1.0 representando a porcentagem de cobertura
-        """
-        # Calcula escala mantendo proporção (fit)
         scale_w = target_w / img_w
         scale_h = target_h / img_h
         scale = min(scale_w, scale_h)
         
-        # Tamanho final da imagem
         final_w = int(img_w * scale)
         final_h = int(img_h * scale)
         
-        # Área coberta vs área total
         coverage = (final_w * final_h) / (target_w * target_h)
         
         return coverage
     
     def _resize_with_blur_background(self, clip: VideoClip, width: int, height: int) -> VideoClip:
-        """
-        Redimensiona clip com fundo borrado (blur background)
-        
-        Se a imagem não preencher pelo menos X% do canvas, usa blur background.
-        Caso contrário, usa padding preto simples.
-        """
         try:
             clip_w, clip_h = clip.size
             
-            # Calcula cobertura
             coverage = self._calculate_coverage(clip_w, clip_h, width, height)
             
-            # Se blur está desativado ou imagem cobre o suficiente, usa método simples
             if not self.blur_config['enabled'] or coverage >= self.blur_config['min_coverage']:
                 return self._resize_clip_simple(clip, width, height)
             
             print(f"      🌫️ Aplicando blur background (cobertura: {coverage*100:.0f}%)")
             
-            # Pega o primeiro frame para criar o fundo
             try:
                 first_frame = clip.get_frame(0)
                 if first_frame.dtype != np.uint8:
                     first_frame = np.uint8(np.clip(first_frame, 0, 255))
                 bg_source = Image.fromarray(first_frame)
             except:
-                # Se não conseguir pegar frame, usa método simples
                 return self._resize_clip_simple(clip, width, height)
             
-            # Cria o fundo borrado
             blur_bg = self._create_blur_background(bg_source, width, height)
             blur_bg_array = np.array(blur_bg)
             
-            # Calcula dimensões da imagem principal (fit)
             scale_w = width / clip_w
             scale_h = height / clip_h
             scale = min(scale_w, scale_h)
@@ -270,25 +273,19 @@ class VideoGenerator:
             new_w = int(clip_w * scale)
             new_h = int(clip_h * scale)
             
-            # Posição centralizada
             x_pos = (width - new_w) // 2
             y_pos = (height - new_h) // 2
             
-            # Redimensiona o clip original
             clip_resized = clip.resize((new_w, new_h))
             
-            # Função para compor cada frame
             def make_frame_with_blur(t):
-                # Começa com o fundo borrado
                 frame = blur_bg_array.copy()
                 
                 try:
-                    # Pega frame do clip original
                     clip_frame = clip_resized.get_frame(t)
                     if clip_frame.dtype != np.uint8:
                         clip_frame = np.uint8(np.clip(clip_frame, 0, 255))
                     
-                    # Cola a imagem principal no centro
                     frame[y_pos:y_pos+new_h, x_pos:x_pos+new_w] = clip_frame
                 except:
                     pass
@@ -302,7 +299,6 @@ class VideoGenerator:
             return self._resize_clip_simple(clip, width, height)
     
     def _resize_clip_simple(self, clip: VideoClip, width: int, height: int) -> VideoClip:
-        """Redimensiona clip com padding preto (método original)"""
         try:
             clip_w, clip_h = clip.size
             
@@ -334,18 +330,11 @@ class VideoGenerator:
             print(f"      ⚠️ Erro no resize simples: {e}")
             return clip.resize((width, height))
     
-    # Mantém o método antigo como alias para compatibilidade
     def _resize_clip_with_padding(self, clip: VideoClip, width: int, height: int) -> VideoClip:
-        """Alias para o novo método com blur background"""
         return self._resize_with_blur_background(clip, width, height)
-    
-    # ===========================================
-    # CARREGAMENTO DE MÍDIAS
-    # ===========================================
     
     def _load_media_as_clip(self, file_path: str, duration: float, 
                             width: int, height: int, apply_effect: bool = True) -> VideoClip:
-        """Carrega qualquer tipo de mídia como VideoClip"""
         media_type = self._get_media_type(file_path)
         
         print(f"      Tipo: {media_type} | Duração: {duration:.1f}s")
@@ -364,7 +353,6 @@ class VideoGenerator:
     
     def _load_video_clip(self, file_path: str, duration: float, 
                          width: int, height: int) -> VideoClip:
-        """Carrega vídeo MP4 com tratamento de erro"""
         try:
             if not self._validate_video_file(file_path):
                 print(f"      ⚠️ Arquivo inválido, usando fallback")
@@ -401,7 +389,6 @@ class VideoGenerator:
     
     def _load_gif_clip(self, file_path: str, duration: float, 
                        width: int, height: int) -> VideoClip:
-        """Carrega GIF com tratamento de erro"""
         try:
             clip = VideoFileClip(file_path)
             
@@ -440,7 +427,6 @@ class VideoGenerator:
     
     def _load_image_clip(self, file_path: str, duration: float, 
                          width: int, height: int, apply_effect: bool = True) -> VideoClip:
-        """Carrega imagem estática com blur background"""
         try:
             img_clip = ImageClip(file_path)
             
@@ -460,7 +446,6 @@ class VideoGenerator:
             return self._create_black_clip(duration, width, height)
     
     def _apply_ken_burns(self, clip, effect: str, duration: float, width: int, height: int):
-        """Aplica efeito Ken Burns em imagens com blur background"""
         original_frame = clip.get_frame(0)
         
         if original_frame.dtype != np.uint8:
@@ -468,32 +453,23 @@ class VideoGenerator:
         
         pil_img = Image.fromarray(original_frame)
         
-        # Verifica se precisa de blur background
         img_w, img_h = pil_img.size
         coverage = self._calculate_coverage(img_w, img_h, width, height)
         use_blur = self.blur_config['enabled'] and coverage < self.blur_config['min_coverage']
         
         if use_blur:
             print(f"      🌫️ Ken Burns com blur background")
-            # Cria fundo borrado
             blur_bg = self._create_blur_background(pil_img, width, height)
         
-        # Prepara imagem para efeito
         scale = 1.2
         base_w = int(width * scale)
         base_h = int(height * scale)
         
-        # Redimensiona imagem mantendo proporção
         img_scale = min(base_w / img_w, base_h / img_h)
         scaled_w = int(img_w * img_scale)
         scaled_h = int(img_h * img_scale)
         
-        try:
-            resample = Image.Resampling.LANCZOS
-        except AttributeError:
-            resample = Image.LANCZOS
-        
-        pil_img_scaled = pil_img.resize((scaled_w, scaled_h), resample)
+        pil_img_scaled = pil_img.resize((scaled_w, scaled_h), self.resample)
         
         def make_frame(t):
             progress = t / duration if duration > 0 else 0
@@ -508,7 +484,6 @@ class VideoGenerator:
             crop_w = int(width / zoom)
             crop_h = int(height / zoom)
             
-            # Calcula posição do crop na imagem escalada
             if effect == "pan_left":
                 x_offset = int((scaled_w - crop_w) * (1 - progress))
             elif effect == "pan_right":
@@ -518,25 +493,19 @@ class VideoGenerator:
             
             y_offset = (scaled_h - crop_h) // 2
             
-            # Garante que não saia dos limites
             x_offset = max(0, min(x_offset, scaled_w - crop_w))
             y_offset = max(0, min(y_offset, scaled_h - crop_h))
             
-            # Corta e redimensiona
             cropped = pil_img_scaled.crop((x_offset, y_offset, x_offset + crop_w, y_offset + crop_h))
-            final_img = cropped.resize((width, height), resample)
+            final_img = cropped.resize((width, height), self.resample)
             
-            # Se usar blur, compõe com o fundo
             if use_blur:
-                # Calcula tamanho da imagem principal neste frame
-                main_w = int(scaled_w / zoom * 0.85)  # 85% do tamanho para não cobrir tudo
+                main_w = int(scaled_w / zoom * 0.85)
                 main_h = int(scaled_h / zoom * 0.85)
                 
-                # Limita ao tamanho do canvas
                 main_w = min(main_w, width - 40)
                 main_h = min(main_h, height - 40)
                 
-                # Mantém proporção
                 img_ratio = img_w / img_h
                 canvas_ratio = main_w / main_h
                 
@@ -545,14 +514,11 @@ class VideoGenerator:
                 else:
                     main_w = int(main_h * img_ratio)
                 
-                # Redimensiona imagem original
-                main_img = pil_img.resize((main_w, main_h), resample)
+                main_img = pil_img.resize((main_w, main_h), self.resample)
                 
-                # Posição centralizada
                 x_pos = (width - main_w) // 2
                 y_pos = (height - main_h) // 2
                 
-                # Compõe: fundo blur + imagem principal
                 result = blur_bg.copy()
                 result.paste(main_img, (x_pos, y_pos))
                 
@@ -562,12 +528,7 @@ class VideoGenerator:
         
         return VideoClip(make_frame, duration=duration)
     
-    # ===========================================
-    # LEGENDAS
-    # ===========================================
-    
     def _render_text_on_frame(self, frame: np.ndarray, text: str, width: int, height: int) -> np.ndarray:
-        """Renderiza texto com borda no frame"""
         if frame.dtype != np.uint8:
             frame = np.uint8(frame)
         
@@ -606,7 +567,6 @@ class VideoGenerator:
     
     def _create_video_with_subtitles(self, base_video, subtitle_text: str, 
                                       duration: float, width: int, height: int) -> VideoClip:
-        """Cria video com legendas"""
         timings = self.srt_gen.calculate_timings(subtitle_text, duration)
         
         print(f"    {len(timings)} legendas sincronizadas")
@@ -635,24 +595,8 @@ class VideoGenerator:
         
         return VideoClip(make_frame_with_subtitle, duration=duration)
     
-    # ===========================================
-    # CONFIGURAÇÃO DE BLUR
-    # ===========================================
-    
-    def set_blur_config(self, 
-                        enabled: bool = None,
-                        blur_radius: int = None,
-                        darken_factor: float = None,
-                        min_coverage: float = None):
-        """
-        Configura o blur background
-        
-        Args:
-            enabled: Ativar/desativar blur
-            blur_radius: Intensidade do blur (10-100)
-            darken_factor: Escurecer fundo (0.0-1.0)
-            min_coverage: Cobertura mínima para não aplicar blur (0.0-1.0)
-        """
+    def set_blur_config(self, enabled: bool = None, blur_radius: int = None,
+                        darken_factor: float = None, min_coverage: float = None):
         if enabled is not None:
             self.blur_config['enabled'] = enabled
         
@@ -667,14 +611,9 @@ class VideoGenerator:
         
         print(f"🌫️ Blur config atualizado: {self.blur_config}")
     
-    # ===========================================
-    # CRIAÇÃO DE VÍDEOS
-    # ===========================================
-    
     def create_short(self, images: list, audio_path: str, output_name: str,
                      add_subtitles: bool = True, subtitle_text: str = None,
                      save_srt: bool = True) -> str:
-        """Cria video short com legendas"""
         return self._create_video(
             media_files=images,
             audio_path=audio_path,
@@ -688,7 +627,6 @@ class VideoGenerator:
     def create_slideshow(self, images: list, audio_path: str, output_name: str,
                          format: str = "youtube", add_subtitles: bool = True,
                          subtitle_text: str = None, save_srt: bool = True) -> str:
-        """Cria slideshow com legendas"""
         return self._create_video(
             media_files=images,
             audio_path=audio_path,
@@ -702,7 +640,6 @@ class VideoGenerator:
     def _create_video(self, media_files: list, audio_path: str, output_name: str,
                       format: str, add_subtitles: bool = True,
                       subtitle_text: str = None, save_srt: bool = True) -> str:
-        """Cria video com legendas e blur background"""
         
         config = self.formats.get(format, self.formats["short"])
         width = config["width"]
@@ -720,7 +657,6 @@ class VideoGenerator:
         if not media_files:
             raise ValueError("Nenhuma mídia fornecida")
         
-        # Filtra arquivos que existem
         valid_files = [f for f in media_files if os.path.exists(f)]
         if len(valid_files) < len(media_files):
             print(f"  ⚠️ {len(media_files) - len(valid_files)} arquivos não encontrados")
@@ -795,7 +731,6 @@ class VideoGenerator:
             logger=None
         )
         
-        # Fecha recursos
         video.close()
         audio.close()
         for clip in clips:
@@ -809,26 +744,17 @@ class VideoGenerator:
         return str(output_path)
 
 
-# ===========================================
-# TESTE
-# ===========================================
-
 if __name__ == "__main__":
     print("="*50)
-    print("VideoGenerator v2.2 - Com Blur Background")
+    print("VideoGenerator v2.3 - CORRIGIDO para Pillow 10+")
     print("="*50)
     
     gen = VideoGenerator()
     
-    # Mostra configuração atual
     print(f"\n🌫️ Configuração de Blur:")
     print(f"   Enabled: {gen.blur_config['enabled']}")
     print(f"   Blur Radius: {gen.blur_config['blur_radius']}")
     print(f"   Darken Factor: {gen.blur_config['darken_factor']}")
     print(f"   Min Coverage: {gen.blur_config['min_coverage']*100}%")
-    
-    # Exemplo de como alterar configuração
-    print("\n📝 Exemplo de uso:")
-    print("   gen.set_blur_config(blur_radius=60, darken_factor=0.5)")
     
     print("\n✅ VideoGenerator pronto!")
