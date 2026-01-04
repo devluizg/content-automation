@@ -24,11 +24,8 @@ google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 
 # === HTTP / REQUESTS ===
-requests==2.31.0
-aiohttp>=3.9.0
-httpx>=0.26.0
+requests>=2.31.0
+httpx>=0.25.2
 
 # === UTILITÁRIOS ===
 python-dotenv==1.0.0
-schedule>=1.2.0
-asyncio-throttle>=1.0.2
