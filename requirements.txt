@@ -15,8 +15,8 @@ gTTS>=2.3.0
 
 # === PROCESSAMENTO DE VÍDEO ===
 moviepy==1.0.3
-Pillow>=10.0.0
-numpy>=1.21.0
+Pillow==9.5.0
+numpy>=1.21.0,<2.0.0
 
 # === YOUTUBE API ===
 google-api-python-client==2.111.0
