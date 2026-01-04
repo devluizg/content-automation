@@ -1,15 +1,15 @@
-# Dockerfile
-FROM python:3.11-slim
+# Dockerfile - CORRIGIDO PARA RAILWAY
+FROM python:3.11-slim-bookworm
 
 # Evita prompts interativos
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
 
-# Instala FFmpeg e dependências do sistema
-RUN apt-get update && apt-get install -y \
+# Instala FFmpeg e dependências (CORRIGIDO)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libsm6 \
     libxext6 \
-    libgl1-mesa-glx \
     fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
@@ -28,10 +28,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY . .
 
 # Cria pastas necessárias
-RUN mkdir -p output/videos output/audio output/images output/projects output/shorts output/logs
-
-# Define variável de ambiente para Python não bufferizar output
-ENV PYTHONUNBUFFERED=1
+RUN mkdir -p output/videos output/audio output/images output/projects output/shorts output/logs config data
 
 # Comando para iniciar o bot
 CMD ["python", "bot.py"]
