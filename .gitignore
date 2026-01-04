@@ -1,35 +1,116 @@
-# Ambiente virtual
-venv/
-.venv/
-env/
+# =============================================
+# CONTENT AUTOMATION BOT - GITIGNORE
+# =============================================
 
-# Variáveis de ambiente
+# === VARIÁVEIS DE AMBIENTE (NUNCA COMMITAR!) ===
 .env
-*.env
+.env.local
+.env.production
+.env.*.local
 
-# Cache Python
+# === CREDENCIAIS ===
+config/client_secrets.json
+config/youtube_credentials.pickle
+*.pickle
+*.json.bak
+
+# === AMBIENTE VIRTUAL ===
+venv/
+env/
+.venv/
+ENV/
+
+# === CACHE PYTHON ===
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Arquivos gerados
+# === OUTPUT GERADO ===
 output/
 *.mp4
 *.mp3
 *.wav
+*.gif
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.srt
+*.vtt
 
-# Credenciais
-config/*_token.pickle
-config/client_secrets.json
-*.pickle
-
-# IDE
-.vscode/
-.idea/
+# === ARQUIVOS TEMPORÁRIOS ===
+*.tmp
+*.temp
+*TEMP*
+*.bak
 *.swp
 *.swo
+*~
 
-# OS
+# === SISTEMA OPERACIONAL ===
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+desktop.ini
+
+# === IDE / EDITORES ===
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+.settings/
+*.code-workspace
+
+# === LOGS ===
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === TESTES ===
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# === JUPYTER ===
+.ipynb_checkpoints/
+
+# === MYPY ===
+.mypy_cache/
+
+# === DADOS LOCAIS ===
+data/manual_projects/
+data/*.bak
+
+# === RENDER / DEPLOY ===
+.render/

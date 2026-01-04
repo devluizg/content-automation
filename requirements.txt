@@ -1,49 +1,34 @@
 # ======================================
-# DEPENDÊNCIAS DO PROJETO (ATUALIZADO)
+# CONTENT AUTOMATION BOT - DEPENDÊNCIAS
 # ======================================
 
-# APIs de LLM (texto) - NOVOS PACOTES
-google-genai>=1.0.0
-groq>=0.4.0
+# === TELEGRAM ===
+python-telegram-bot==20.7
 
-# Text-to-Speech (narração)
+# === IA / LLM ===
+google-genai>=1.0.0
+groq==0.4.2
+
+# === TEXT-TO-SPEECH ===
 edge-tts>=6.1.0
 gTTS>=2.3.0
 
-# Processamento de vídeo
-moviepy>=1.0.3
+# === PROCESSAMENTO DE VÍDEO ===
+moviepy==1.0.3
 Pillow>=10.0.0
+numpy>=1.21.0
 
-# HTTP e requisições
-requests>=2.31.0
-aiohttp>=3.9.0
-
-# YouTube API (opcional)
-google-auth-oauthlib>=1.0.0
-google-api-python-client>=2.100.0
-
-# Utilitários
-python-dotenv>=1.0.0
-schedule>=1.2.0
-
-# Async
-asyncio-throttle>=1.0.2
-
-python-telegram-bot==20.7
-
-# YouTube API
+# === YOUTUBE API ===
 google-api-python-client==2.111.0
 google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 
-# IA e Geração
-groq==0.4.2
+# === HTTP / REQUESTS ===
 requests==2.31.0
-Pillow==10.2.0
+aiohttp>=3.9.0
+httpx>=0.26.0
 
-# Video
-moviepy==1.0.3
-
-# Utils
+# === UTILITÁRIOS ===
 python-dotenv==1.0.0
-numpy>=1.21.0
+schedule>=1.2.0
+asyncio-throttle>=1.0.2

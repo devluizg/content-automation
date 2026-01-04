@@ -1,0 +1,27 @@
+# render.yaml - Blueprint para deploy automático
+services:
+  - type: worker
+    name: content-automation-bot
+    runtime: docker
+    repo: https://github.com/devluizg/content-automation.git
+    branch: main
+    plan: free
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: AUTHORIZED_USERS
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: TENOR_API_KEY
+        sync: false
+      - key: PIXABAY_API_KEY
+        sync: false
+      - key: DISABLE_YOUTUBE_UPLOAD
+        value: "true"
+      - key: LOG_LEVEL
+        value: "INFO"
+      - key: PYTHONUNBUFFERED
+        value: "1"
